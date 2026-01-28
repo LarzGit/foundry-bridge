@@ -1,27 +1,42 @@
+const http = require("http");
 const { Server } = require("socket.io");
 
-// Хмара сама скаже, який порт використовувати через process.env.PORT
-// Якщо ми локально - то 3000
 const PORT = process.env.PORT || 3000;
 
-const io = new Server(PORT, {
+// 1. Створюємо веб-сервер, який вміє говорити "Привіт"
+const httpServer = http.createServer((req, res) => {
+    // Якщо браузер просить головну сторінку "/"
+    if (req.url === "/") {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.write(`
+            <html>
+                <body style="background: #222; color: #0f0; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh;">
+                    <h1>🟢 SERVER ONLINE: ${new Date().toLocaleTimeString()}</h1>
+                </body>
+            </html>
+        `);
+        res.end();
+    } else {
+        // Для всіх інших запитів
+        res.writeHead(404);
+        res.end();
+    }
+});
+
+// 2. Підключаємо Socket.IO (для телефону і Foundry)
+const io = new Server(httpServer, {
     cors: {
-        origin: "*", // Дозволяємо підключення з будь-якої точки світу
+        origin: "*", // Дозволяємо підключення звідусіль
         methods: ["GET", "POST"]
     },
 });
 
-console.log(`🌉 BRIDGE | Сервер слухає порт ${PORT}`);
+console.log(`🌉 BRIDGE | Запуск на порту ${PORT}`);
 
 io.on("connection", (socket) => {
-    // ... весь твій старий код connection залишається тут ...
-    console.log(`🔌 Нове підключення: ${socket.id}`);
+    console.log(`🔌 Клієнт підключився: ${socket.id}`);
 
-    // ТУТ МАЄ БУТИ ВЕСЬ КОД (on 'foundry_update_hp', on 'mobile_roll' тощо)
-    // Який ми писали раніше. Не видаляй логіку!
-
-    // (Скопіюй сюди внутрішності з минулого файлу)
-
+    // Логіка пересилання даних
     socket.on("foundry_update_hp", (data) => io.emit("phone_update_hp", data));
     socket.on("login_response", (data) => io.emit("login_response", data));
     socket.on("login_request", (id) => io.emit("check_login", id));
@@ -29,6 +44,7 @@ io.on("connection", (socket) => {
     socket.on("mobile_ability_check", (data) => io.emit("foundry_do_ability", data));
 });
 
-// Для Render іноді треба запустити "пустий" HTTP сервер, щоб він не падав
-// Але для socket.io v4 standalone зазвичай цього вистачає.
-// Давай поки залишимо так.
+// 3. ЗАПУСКАЄМО СЕРВЕР
+httpServer.listen(PORT, () => {
+    console.log(`🚀 Server listening on port ${PORT}`);
+});
