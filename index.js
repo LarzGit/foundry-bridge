@@ -33,27 +33,30 @@ const io = new Server(httpServer, {
 
 console.log(`🌉 BRIDGE | Запуск на порту ${PORT}`);
 
+// 3. ОСЬ ТУТ ПОЧИНАЄТЬСЯ ГОЛОВНА ЛОГІКА
 io.on("connection", (socket) => {
     console.log(`🔌 Клієнт підключився: ${socket.id}`);
 
-    // Логіка пересилання даних
+    // --- Стара логіка ---
     socket.on("foundry_update_hp", (data) => io.emit("phone_update_hp", data));
     socket.on("login_response", (data) => io.emit("login_response", data));
     socket.on("login_request", (id) => io.emit("check_login", id));
     socket.on("mobile_roll", (data) => io.emit("foundry_do_roll", data));
     socket.on("mobile_ability_check", (data) => io.emit("foundry_do_ability", data));
-});
 
-// 3. ЗАПУСКАЄМО СЕРВЕР
+    // --- НОВА ЛОГІКА (ВОНА МАЄ БУТИ ТУТ, ВСЕРЕДИНІ) ---
+    // Запит листа
+    socket.on("request_sheet_data", (id) => io.emit("request_sheet_data", id));
+    socket.on("receive_sheet_data", (data) => io.emit("receive_sheet_data", data));
+
+    // Дії (Items / Skills)
+    socket.on("mobile_use_item", (data) => io.emit("mobile_use_item", data));
+    socket.on("mobile_roll_skill", (data) => io.emit("mobile_roll_skill", data));
+    socket.on("mobile_roll_ability", (data) => io.emit("mobile_roll_ability", data));
+
+}); // <--- ОСЬ ТУТ ЗАКРИВАЄТЬСЯ ДУЖКА. Після неї 'socket' не існує!
+
+// 4. ЗАПУСКАЄМО СЕРВЕР
 httpServer.listen(PORT, () => {
     console.log(`🚀 Server listening on port ${PORT}`);
 });
-
-// Запит листа
-socket.on("request_sheet_data", (id) => io.emit("request_sheet_data", id));
-socket.on("receive_sheet_data", (data) => io.emit("receive_sheet_data", data));
-
-// Дії (Items / Skills)
-socket.on("mobile_use_item", (data) => io.emit("mobile_use_item", data));
-socket.on("mobile_roll_skill", (data) => io.emit("mobile_roll_skill", data));
-socket.on("mobile_roll_ability", (data) => io.emit("mobile_roll_ability", data));
