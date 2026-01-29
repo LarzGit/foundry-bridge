@@ -48,3 +48,12 @@ io.on("connection", (socket) => {
 httpServer.listen(PORT, () => {
     console.log(`🚀 Server listening on port ${PORT}`);
 });
+
+// Запит листа
+socket.on("request_sheet_data", (id) => io.emit("request_sheet_data", id));
+socket.on("receive_sheet_data", (data) => io.emit("receive_sheet_data", data));
+
+// Дії (Items / Skills)
+socket.on("mobile_use_item", (data) => io.emit("mobile_use_item", data));
+socket.on("mobile_roll_skill", (data) => io.emit("mobile_roll_skill", data));
+socket.on("mobile_roll_ability", (data) => io.emit("mobile_roll_ability", data));
