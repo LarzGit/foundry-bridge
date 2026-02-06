@@ -30,11 +30,14 @@ io.on("connection", (socket) => {
     // --- КИДКИ З ТЕЛЕФОНУ ---
     socket.on("mobile_roll_skill", (data) => io.emit("mobile_roll_skill", data));
     socket.on("mobile_roll_ability", (data) => io.emit("mobile_roll_ability", data));
+
+    // 🔥 ОСЬ ЦЬОГО РЯДКА НЕ ВИСТАЧАЛО! ДОДАЙ ЙОГО:
+    socket.on("mobile_roll_save", (data) => io.emit("mobile_roll_save", data));
+
     socket.on("mobile_use_item", (data) => io.emit("mobile_use_item", data));
     socket.on("mobile_roll_damage", (data) => io.emit("mobile_roll_damage", data));
 
     // --- 🆕 ЧАТ (FOUNDRY -> PHONE) ---
-    // Сервер просто пересилає повідомлення всім
     socket.on("foundry_chat_message", (data) => io.emit("phone_chat_message", data));
 
 });
