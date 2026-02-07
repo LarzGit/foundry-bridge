@@ -6,7 +6,7 @@ const PORT = process.env.PORT || 3000;
 const httpServer = http.createServer((req, res) => {
     if (req.url === "/") {
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        res.write(`<h1>🟢 BRIDGE ONLINE (Rooms Enabled)</h1>`);
+        res.write(`<h1>🟢 BRIDGE ONLINE (Stable + Rooms)</h1>`);
         res.end();
     } else {
         res.writeHead(404);
@@ -14,75 +14,71 @@ const httpServer = http.createServer((req, res) => {
     }
 });
 
+// 🔥 ВАЖЛИВО: Збільшуємо ліміт буфера до 10МБ, щоб великі мапи не рвали з'єднання
 const io = new Server(httpServer, {
     cors: { origin: "*", methods: ["GET", "POST"] },
+    maxHttpBufferSize: 1e7
 });
 
 io.on("connection", (socket) => {
     console.log(`🔌 Connected: ${socket.id}`);
 
-    // --- 1. ВИБІР ПЕРСОНАЖА (Загальний канал) ---
-    // Список героїв бачать усі, хто на екрані вибору
-    socket.on("request_actor_list", () => io.emit("request_actor_list"));
-    socket.on("receive_actor_list", (list) => io.emit("receive_actor_list", list));
-
-
-    // --- 2. АВТОРИЗАЦІЯ ТА КІМНАТИ (🔥 ВАЖЛИВЕ ВИПРАВЛЕННЯ) ---
-
+    // --- 1. АВТОРИЗАЦІЯ ТА КІМНАТИ ---
     socket.on("mobile_login_attempt", (data) => {
-        // 🔒 КРОК 1: Телефон приєднується до приватної кімнати цього персонажа
+        // Телефон заходить у свою приватну кімнату
         const roomName = `actor_${data.actorId}`;
         socket.join(roomName);
         console.log(`📱 Socket ${socket.id} joined room: ${roomName}`);
 
-        // КРОК 2: Повідомляємо Foundry, що хтось хоче увійти (це бачить Foundry)
+        // Повідомляємо Foundry (всім), що хтось стукає
         io.emit("mobile_login_attempt", data);
     });
 
-    // Результат логіну поки шлемо всім (телефон сам розбереться, чи це йому)
-    // Але завдяки кімнатам дані не перемішаються
     socket.on("login_success", () => io.emit("login_success"));
     socket.on("login_failed", () => io.emit("login_failed"));
 
+    // --- 2. ВИБІР ПЕРСОНАЖА ---
+    socket.on("request_actor_list", () => io.emit("request_actor_list"));
+    socket.on("receive_actor_list", (list) => io.emit("receive_actor_list", list));
 
-    // --- 3. СИНХРОНІЗАЦІЯ ДАНИХ (🔥 ІЗОЛЯЦІЯ) ---
-
+    // --- 3. ДАНІ ПЕРСОНАЖА (ІЗОЛЬОВАНІ) ---
     socket.on("request_sheet_data", (id) => io.emit("request_sheet_data", id));
 
-    // 🏆 ГОЛОВНИЙ ФІКС: Відправляємо дані ТІЛЬКИ в кімнату цього персонажа
     socket.on("receive_sheet_data", (data) => {
         if (data && data.id) {
-            const roomName = `actor_${data.id}`;
-            // io.to(...) відправляє тільки підписникам цієї кімнати
-            io.to(roomName).emit("receive_sheet_data", data);
-            // console.log(`📦 Data sent to room: ${roomName}`); // розкоментуй для дебагу
+            // 🔥 Шлемо тільки в кімнату конкретного персонажа
+            io.to(`actor_${data.id}`).emit("receive_sheet_data", data);
         }
     });
 
+    // --- 4. МАПА ТА ТОКЕНИ (ОПТИМІЗАЦІЯ) ---
+    // Використовуємо socket.broadcast.emit замість io.emit
+    // Це означає: "Відправити всім КРІМ того, хто надіслав (Foundry)"
+    // Це запобігає петлям даних, які кладуть сервер.
 
-    // --- 4. МАПА ТА ТОКЕНИ (Спільний простір) ---
-    // Мапу бачать усі однаково, тому тут broadcast (emit)
-    socket.on("send_map_data", (data) => io.emit("receive_map_data", data));
-    socket.on("send_tokens", (data) => io.emit("receive_tokens", data));
+    socket.on("send_map_data", (data) => {
+        socket.broadcast.emit("receive_map_data", data);
+    });
 
-    // Рух токена відправляємо у Foundry
+    socket.on("send_tokens", (data) => {
+        socket.broadcast.emit("receive_tokens", data);
+    });
+
+    // Рух від телефону до Foundry
     socket.on("mobile_move_token", (data) => io.emit("mobile_move_token", data));
 
-
     // --- 5. КИДКИ ТА ДІЇ (Телефон -> Foundry) ---
-    // Тут просто пересилаємо команди від телефону до Foundry
-    socket.on("mobile_roll_skill", (data) => io.emit("mobile_roll_skill", data));
-    socket.on("mobile_roll_ability", (data) => io.emit("mobile_roll_ability", data));
-    socket.on("mobile_roll_save", (data) => io.emit("mobile_roll_save", data));
-    socket.on("mobile_use_item", (data) => io.emit("mobile_use_item", data));
-    socket.on("mobile_roll_damage", (data) => io.emit("mobile_roll_damage", data));
+    const relayEvents = [
+        "mobile_roll_skill", "mobile_roll_ability", "mobile_roll_save",
+        "mobile_use_item", "mobile_roll_damage", "mobile_chat_message"
+    ];
 
+    relayEvents.forEach(event => {
+        socket.on(event, (data) => io.emit(event, data));
+    });
 
-    // --- 6. ЧАТ (Загальний) ---
-    // Чат має бути спільним, щоб усі бачили повідомлення один одного
+    // --- 6. ЧАТ (Foundry -> Телефон) ---
     socket.on("foundry_chat_message", (data) => io.emit("phone_chat_message", data));
-    socket.on("mobile_chat_message", (data) => io.emit("mobile_chat_message", data));
-
 
     socket.on("disconnect", () => console.log(`❌ Disconnected: ${socket.id}`));
 });
